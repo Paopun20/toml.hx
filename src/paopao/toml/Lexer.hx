@@ -61,7 +61,9 @@ class Lexer {
 
 				default:
 					if (isIdentifierStart(c)) {
-						tokens.push(readIdentifierOrValue());
+						for (token in readIdentifierOrValue()) {
+							tokens.push(token);
+						}
 					} else {
 						throw error('Unexpected character "$c"');
 					}
@@ -201,7 +203,7 @@ class Lexer {
 		return regex.match(value);
 	}
 
-	private function readIdentifierOrValue():Token {
+	private function readIdentifierOrValue():Array<Token> {
 		var startLine = line;
 		var startColumn = column;
 
@@ -229,21 +231,36 @@ class Lexer {
 		var value = buf.toString();
 
 		if (value == "true" || value == "false") {
-			return new Token(TokenType.BOOLEAN, value, startLine, startColumn);
+			return [new Token(TokenType.BOOLEAN, value, startLine, startColumn)];
 		}
 
 		if (isDateTime(value)) {
-			return new Token(TokenType.DATETIME, value, startLine, startColumn);
+			return [new Token(TokenType.DATETIME, value, startLine, startColumn)];
 		}
 
 		if (isInteger(value)) {
-			return new Token(TokenType.INTEGER, value, startLine, startColumn);
+			return [new Token(TokenType.INTEGER, value, startLine, startColumn)];
 		}
 
 		if (isFloat(value)) {
-			return new Token(TokenType.FLOAT, value, startLine, startColumn);
+			return [new Token(TokenType.FLOAT, value, startLine, startColumn)];
 		}
 
-		return new Token(TokenType.IDENTIFIER, value, startLine, startColumn);
+		if (value.indexOf(".") >= 0) {
+			var result:Array<Token> = [];
+			var parts = value.split(".");
+
+			for (i in 0...parts.length) {
+				result.push(new Token(TokenType.IDENTIFIER, parts[i], startLine, startColumn));
+
+				if (i < parts.length - 1) {
+					result.push(new Token(TokenType.DOT, ".", startLine, startColumn));
+				}
+			}
+
+			return result;
+		}
+
+		return [new Token(TokenType.IDENTIFIER, value, startLine, startColumn)];
 	}
 }
