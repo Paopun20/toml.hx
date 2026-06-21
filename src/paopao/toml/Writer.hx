@@ -1,72 +1,58 @@
 package paopao.toml;
 
-import Reflect;
-import Type;
+using StringTools;
 
 class Writer {
 	public static function write(value:Dynamic):String {
 		var out = new StringBuf();
-
 		writeTable(out, "", value);
-
 		return out.toString();
 	}
 
 	static function isTableArray(value:Dynamic):Bool {
-		if (!Std.isOfType(value, Array)) {
+		if (!Std.isOfType(value, Array))
 			return false;
-		}
-
 		var arr:Array<Dynamic> = cast value;
-
 		if (arr.length == 0)
 			return false;
-
 		for (item in arr) {
 			if (!isTable(item))
 				return false;
 		}
-
 		return true;
 	}
 
 	static function writeArrayTable(out:StringBuf, path:String, tables:Array<Dynamic>):Void {
 		for (table in tables) {
-			out.add("[[");
-			out.add(path);
-			out.add("]]\n");
+			out.add('[[$path]]\n');
 
+			// Write simple fields first
 			for (field in Reflect.fields(table)) {
 				var value = Reflect.field(table, field);
-
-				if (isTable(value) || isTableArray(value)) {
+				if (isTable(value) || isTableArray(value))
 					continue;
-				}
-
-				out.add(field);
-				out.add(" = ");
-				out.add(writeValue(value));
-				out.add("\n");
+				out.add('$field = ${writeValue(value)}\n');
 			}
 
 			out.add("\n");
 
+			// Write nested table and array-of-table fields
 			for (field in Reflect.fields(table)) {
 				var value = Reflect.field(table, field);
+				var childPath = path == "" ? field : '$path.$field';
 
-				if (!isTable(value))
-					continue;
-
-				writeTable(out, path + "." + field, value);
+				if (isTableArray(value)) {
+					writeArrayTable(out, childPath, cast value);
+				} else if (isTable(value)) {
+					writeTable(out, childPath, value);
+				}
 			}
 		}
 	}
 
 	static function writeTable(out:StringBuf, path:String, obj:Dynamic):Void {
 		if (path != "") {
-			out.add("[");
-			out.add(path);
-			out.add("]\n");
+			out.add('[$path]\n');
 		}
 
 		var childTables:Array<String> = [];
@@ -74,20 +60,12 @@ class Writer {
 		for (field in Reflect.fields(obj)) {
 			var value = Reflect.field(obj, field);
 
-			if (isTable(value)) {
+			if (isTable(value) || isTableArray(value)) {
 				childTables.push(field);
 				continue;
 			}
 
-			if (isTableArray(value)) {
-				childTables.push(field);
-				continue;
-			}
-
-			out.add(field);
-			out.add(" = ");
-			out.add(writeValue(value));
-			out.add("\n");
+			out.add('$field = ${writeValue(value)}\n');
 		}
 
 		if (childTables.length > 0)
@@ -95,8 +73,7 @@ class Writer {
 
 		for (table in childTables) {
 			var child = Reflect.field(obj, table);
-
-			var childPath = path == "" ? table : path + "." + table;
+			var childPath = path == "" ? table : '$path.$table';
 
 			if (isTableArray(child)) {
 				writeArrayTable(out, childPath, cast child);
@@ -110,84 +87,78 @@ class Writer {
 		if (value == null)
 			return "\"\"";
 
-		if (Std.isOfType(value, String)) {
+		if (Std.isOfType(value, String))
 			return writeString(cast value);
-		}
-
-		if (Std.isOfType(value, Bool)) {
+		if (Std.isOfType(value, Bool))
 			return Std.string(value);
-		}
-
-		if (Std.isOfType(value, Int)) {
+		if (Std.isOfType(value, Int))
 			return Std.string(value);
-		}
 
 		if (Std.isOfType(value, Float)) {
-			return Std.string(value);
+			var f:Float = cast value;
+			if (Math.isNaN(f))
+				return "nan";
+			if (f == Math.POSITIVE_INFINITY)
+				return "inf";
+			if (f == Math.NEGATIVE_INFINITY)
+				return "-inf";
+			return Std.string(f);
 		}
 
-		if (Std.isOfType(value, Array)) {
+		if (Std.isOfType(value, Array))
 			return writeArray(cast value);
-		}
+		if (Std.isOfType(value, Date))
+			return writeDate(cast value);
 
 		return writeInlineTable(value);
 	}
 
+	static function writeDate(date:Date):String {
+		// Formats Date to RFC 3339 (TOML standard)
+		function pad(n:Int)
+			return n < 10 ? "0" + n : "" + n;
+		var y = date.getFullYear();
+		var m = pad(date.getMonth() + 1);
+		var d = pad(date.getDate());
+		var h = pad(date.getHours());
+		var i = pad(date.getMinutes());
+		var s = pad(date.getSeconds());
+		return '"$y-$m-${d}T$h:$i:${s}Z"';
+	}
+
 	static function writeString(value:String):String {
 		var escaped = value;
-
-		escaped = StringTools.replace(escaped, "\\", "\\\\");
-
-		escaped = StringTools.replace(escaped, "\"", "\\\"");
-
-		escaped = StringTools.replace(escaped, "\n", "\\n");
-
-		escaped = StringTools.replace(escaped, "\r", "\\r");
-
-		escaped = StringTools.replace(escaped, "\t", "\\t");
-
-		return "\"" + escaped + "\"";
+		escaped = escaped.replace("\\", "\\\\");
+		escaped = escaped.replace("\"", "\\\"");
+		escaped = escaped.replace("\n", "\\n");
+		escaped = escaped.replace("\r", "\\r");
+		escaped = escaped.replace("\t", "\\t");
+		escaped = escaped.replace("\x08", "\\b"); // Backspace
+		escaped = escaped.replace("\x0C", "\\f"); // Form feed
+		return '"' + escaped + '"';
 	}
 
 	static function writeArray(arr:Array<Dynamic>):String {
 		var parts = new Array<String>();
-
-		for (v in arr) {
+		for (v in arr)
 			parts.push(writeValue(v));
-		}
-
 		return "[" + parts.join(", ") + "]";
 	}
 
 	static function writeInlineTable(obj:Dynamic):String {
 		var parts = new Array<String>();
-
 		for (field in Reflect.fields(obj)) {
-			parts.push(field + " = " + writeValue(Reflect.field(obj, field)));
+			parts.push('$field = ${writeValue(Reflect.field(obj, field))}');
 		}
-
 		return "{ " + parts.join(", ") + " }";
 	}
 
 	static function isTable(value:Dynamic):Bool {
 		if (value == null)
 			return false;
-
-		if (Std.isOfType(value, String))
+		if (Std.isOfType(value, String) || Std.isOfType(value, Array))
 			return false;
-
-		if (Std.isOfType(value, Bool))
-			return false;
-
-		if (Std.isOfType(value, Int))
-			return false;
-
-		if (Std.isOfType(value, Float))
-			return false;
-
-		if (Std.isOfType(value, Array))
-			return false;
-
-		return Type.typeof(value) == TObject;
+		// Reflect.isObject correctly identifies both anonymous structures and class instances
+		return Reflect.isObject(value);
 	}
 }
