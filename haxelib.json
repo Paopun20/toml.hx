@@ -8,9 +8,9 @@
     "config"
   ],
   "description": "TOML parser/writer for Haxe",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "classPath": "src",
-  "releasenote": "fix README",
+  "releasenote": "bruh",
   "contributors": [
     "paopaodev"
   ]

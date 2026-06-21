@@ -22,7 +22,7 @@ A Haxe implementation of the [TOML](https://toml.io/) configuration language.
 ### Haxelib
 
 ```bash
-haxelib install toml
+haxelib install toml.hx
 ```
 
 ### Development
