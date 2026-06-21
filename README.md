@@ -36,7 +36,7 @@ git clone https://github.com/yourname/toml-hx.git
 ### Parsing
 
 ```haxe
-import toml.Toml;
+import paopao.toml.Toml;
 
 var config = Toml.parse('
 title = "Example"
@@ -52,7 +52,7 @@ trace(config.database.host);
 ### Loading a File
 
 ```haxe
-import toml.Toml;
+import paopao.toml.Toml;
 
 var config = Toml.parseFile(
     "config.toml"
@@ -64,7 +64,7 @@ trace(config.database.port);
 ### Writing
 
 ```haxe
-import toml.Toml;
+import paopao.toml.Toml;
 
 var config = {
     title: "Example",
@@ -127,4 +127,4 @@ enabled = true
 
 ## License
 
-MIT
+[License](./License.md)
