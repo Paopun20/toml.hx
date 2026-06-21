@@ -1,0 +1,17 @@
+{
+  "name": "toml.hx",
+  "url": "",
+  "license": "MIT",
+  "tags": [
+    "toml",
+    "serialization",
+    "config"
+  ],
+  "description": "TOML parser/writer for Haxe",
+  "version": "1.0.0",
+  "classPath": "src",
+  "releasenote": "Initial release",
+  "contributors": [
+    "yourname"
+  ]
+}
