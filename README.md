@@ -4,17 +4,6 @@ A Haxe implementation of the [TOML](https://toml.io/) configuration language.
 
 ## Features
 
-- TOML parser
-- TOML serializer
-- Tables
-- Nested tables
-- Arrays
-- Nested arrays
-- Inline tables
-- Dotted keys
-- Array of tables (`[[table]]`)
-- File loading and saving
-- Haxe `Dynamic` object support
 - Cross-platform
 
 ## Installation
@@ -28,7 +17,7 @@ haxelib install toml.hx
 ### Development
 
 ```bash
-git clone https://github.com/Paopun20/toml.hx
+haxelib git toml.hx https://github.com/Paopun20/Toml.hx
 ```
 
 ## Usage
@@ -124,6 +113,10 @@ server = "192.168.1.1"
 ports = [8000, 8001, 8002]
 enabled = true
 ```
+
+### Validation Rules
+
+please read [official validation rules format](https://toml.io/en/v1.1.0)
 
 ## License
 

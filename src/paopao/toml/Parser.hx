@@ -6,6 +6,7 @@ import Date;
 
 class Parser {
 	private final tokens:Array<Token>;
+	private final definedTables:Map<String, Bool> = [];
 	private var current:Int = 0;
 
 	public function new(tokens:Array<Token>) {
@@ -60,6 +61,10 @@ class Parser {
 
 		consume(TokenType.RBRACKET, "Expected second ']'");
 
+		if (parts.length == 0) {
+			throw error(previous(), "Expected table name");
+		}
+
 		var current:Dynamic = root;
 
 		// Walk every segment except the last. If an ancestor is itself an
@@ -72,6 +77,10 @@ class Parser {
 
 		var finalName = parts[parts.length - 1];
 		var finalToken = partTokens[partTokens.length - 1];
+
+		if (definedTables.exists(parts.join("."))) {
+			throw error(finalToken, '"${parts.join(".")}" is already defined as a table');
+		}
 
 		var arr:Array<Dynamic>;
 
@@ -116,6 +125,18 @@ class Parser {
 
 		consume(TokenType.RBRACKET, "Expected ']'");
 
+		if (parts.length == 0) {
+			throw error(previous(), "Expected table name");
+		}
+
+		var path = parts.join(".");
+
+		if (definedTables.exists(path)) {
+			throw error(partTokens[partTokens.length - 1], 'Table "$path" already defined');
+		}
+
+		definedTables.set(path, true);
+
 		var current:Dynamic = root;
 
 		for (i in 0...parts.length) {
@@ -149,6 +170,10 @@ class Parser {
 
 		assignDottedKey(table, keyParts, keyTokens, value);
 
+		if (!check(TokenType.NEWLINE) && !check(TokenType.EOF)) {
+			throw error(peek(), "Expected newline after key/value pair");
+		}
+
 		skipNewlines();
 	}
 
@@ -162,7 +187,19 @@ class Parser {
 			current = descend(current, parts[i], partTokens[i]);
 		}
 
-		Reflect.setField(current, parts[parts.length - 1], value);
+		var finalKey = parts[parts.length - 1];
+
+		if (Reflect.hasField(current, finalKey)) {
+			throw error(partTokens[partTokens.length - 1], 'Duplicate key "$finalKey"');
+		}
+
+		var existing = Reflect.field(current, finalKey);
+
+		if (existing != null && isTableLike(existing)) {
+			throw error(partTokens[partTokens.length - 1], 'Cannot redefine table "$finalKey" as a value');
+		}
+
+		Reflect.setField(current, finalKey, value);
 	}
 
 	private function parseValue():Dynamic {
@@ -220,6 +257,10 @@ class Parser {
 
 		while (!check(TokenType.RBRACE)) {
 			var key = consumeKey("Expected inline table key");
+
+			if (Reflect.hasField(obj, key.value)) {
+				throw error(key, 'Duplicate key "${key.value}"');
+			}
 
 			consume(TokenType.EQUALS, "Expected '='");
 

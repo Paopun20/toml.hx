@@ -135,6 +135,28 @@ class Lexer {
 			|| (code >= "0".code && code <= "9".code);
 	}
 
+	private function readUnicodeEscape(length:Int):String {
+		var hex = "";
+
+		for (i in 0...length) {
+			if (isAtEnd()) {
+				throw new TomlError("Unexpected end of unicode escape", line, column);
+			}
+
+			var c = advance();
+
+			if (!~/^[0-9A-Fa-f]$/.match(c)) {
+				throw new TomlError('Invalid hex digit "$c"', line, column);
+			}
+
+			hex += c;
+		}
+
+		var codepoint = Std.parseInt("0x" + hex);
+
+		return String.fromCharCode(codepoint);
+	}
+
 	private function readString():Token {
 		var startLine = line;
 		var startColumn = column;
@@ -158,20 +180,38 @@ class Lexer {
 				var escaped = advance();
 
 				switch (escaped) {
-					case "n":
-						buf.add("\n");
-
-					case "r":
-						buf.add("\r");
+					case "b":
+						buf.addChar(0x08);
 
 					case "t":
-						buf.add("\t");
+						buf.addChar(0x09);
+
+					case "n":
+						buf.addChar(0x0A);
+
+					case "f":
+						buf.addChar(0x0C);
+
+					case "r":
+						buf.addChar(0x0D);
+
+					case "e":
+						buf.addChar(0x1B);
 
 					case "\"":
 						buf.add("\"");
 
 					case "\\":
 						buf.add("\\");
+
+					case "x":
+						buf.add(readUnicodeEscape(2));
+
+					case "u":
+						buf.add(readUnicodeEscape(4));
+
+					case "U":
+						buf.add(readUnicodeEscape(8));
 
 					default:
 						throw new TomlError('Invalid escape sequence \\$escaped', line, column);
