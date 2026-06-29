@@ -8,7 +8,10 @@ import Date;
 final class Parser {
 	private final tokens:Array<Token>;
 	private final definedTables:Map<String, Bool> = [];
+	private final arrayTables:Map<String, Bool> = [];
+	private final sealedTables:Map<String, String> = [];
 	private var current:Int = 0;
+	private var currentTablePath:String = "";
 
 	public function new(tokens:Array<Token>) {
 		this.tokens = tokens;
@@ -28,6 +31,9 @@ final class Parser {
 				advance();
 
 				if (match(TokenType.LBRACKET)) {
+					if (previous().column != tokens[current - 2].column + 1)
+						throw error(previous(), "Expected contiguous '[['");
+
 					currentTable = parseArrayTable(root);
 				} else
 					currentTable = parseTable(root);
@@ -35,7 +41,7 @@ final class Parser {
 				continue;
 			}
 
-			parseKeyValue(currentTable);
+			parseKeyValue(currentTable, currentTablePath);
 		}
 
 		return root;
@@ -60,13 +66,18 @@ final class Parser {
 		consume(TokenType.RBRACKET, "Expected ']'");
 		consume(TokenType.RBRACKET, "Expected second ']'");
 
+		if (previous().column != tokens[current - 2].column + 1)
+			throw error(previous(), "Expected contiguous ']]'");
+
+		consumeLineEnd("Expected newline after array table header");
+
 		if (parts.length == 0)
 			throw error(previous(), "Expected table name");
 
 		var current:Dynamic = root;
 
 		for (i in 0...parts.length - 1)
-			current = descend(current, parts[i], partTokens[i]);
+			current = descend(current, parts[i], partTokens[i], parts.slice(0, i + 1).join("."));
 
 		var finalName = parts[parts.length - 1];
 		var finalToken = partTokens[partTokens.length - 1];
@@ -84,17 +95,20 @@ final class Parser {
 		} else {
 			var existing = Reflect.field(current, finalName);
 
-			if (!Std.isOfType(existing, Array))
+			if (!Std.isOfType(existing, Array) || !arrayTables.exists(path))
 				throw error(finalToken, 'Cannot define "$finalName" as an array of tables; it is already defined as a different type');
 
 			arr = cast existing;
 		}
+
+		arrayTables.set(path, true);
 
 		var obj:Dynamic = {};
 
 		arr.push(obj);
 
 		skipNewlines();
+		currentTablePath = path;
 
 		return obj;
 	}
@@ -116,13 +130,14 @@ final class Parser {
 		}
 
 		consume(TokenType.RBRACKET, "Expected ']'");
+		consumeLineEnd("Expected newline after table header");
 
 		if (parts.length == 0)
 			throw error(previous(), "Expected table name");
 
 		var path = parts.join(".");
 
-		if (definedTables.exists(path))
+		if (definedTables.exists(path) || sealedTables.exists(path) || arrayTables.exists(path))
 			throw error(partTokens[partTokens.length - 1], 'Table "$path" already defined');
 
 		definedTables.set(path, true);
@@ -130,14 +145,15 @@ final class Parser {
 		var current:Dynamic = root;
 
 		for (i in 0...parts.length)
-			current = descend(current, parts[i], partTokens[i]);
+			current = descend(current, parts[i], partTokens[i], parts.slice(0, i + 1).join("."));
 
 		skipNewlines();
+		currentTablePath = path;
 
 		return current;
 	}
 
-	private function parseKeyValue(table:Dynamic):Void {
+	private function parseKeyValue(table:Dynamic, basePath:String):Void {
 		var keyParts:Array<String> = [];
 		var keyTokens:Array<Token> = [];
 
@@ -157,7 +173,7 @@ final class Parser {
 
 		var value = parseValue();
 
-		assignDottedKey(table, keyParts, keyTokens, value);
+		assignDottedKey(table, keyParts, keyTokens, value, basePath);
 
 		if (!check(TokenType.NEWLINE) && !check(TokenType.EOF))
 			throw error(peek(), "Expected newline after key/value pair");
@@ -165,14 +181,24 @@ final class Parser {
 		skipNewlines();
 	}
 
-	private function assignDottedKey(root:Dynamic, parts:Array<String>, partTokens:Array<Token>, value:Dynamic):Void {
+	private function assignDottedKey(root:Dynamic, parts:Array<String>, partTokens:Array<Token>, value:Dynamic, basePath:String):Void {
 		var current = root;
 
 		// Same rule as table headers: if an earlier segment of a dotted
 		// key already resolves to an array of tables, the assignment
 		// belongs to that array's most recently defined element.
-		for (i in 0...parts.length - 1)
-			current = descend(current, parts[i], partTokens[i]);
+		for (i in 0...parts.length - 1) {
+			var path = joinPath(basePath, parts.slice(0, i + 1));
+
+			if (definedTables.exists(path))
+				throw error(partTokens[i], 'Cannot append to explicitly defined table "$path" with a dotted key');
+
+			if (arrayTables.exists(path) && basePath != path && !StringTools.startsWith(basePath, path + "."))
+				throw error(partTokens[i], 'Cannot append to array of tables "$path" from "$basePath"');
+
+			current = descend(current, parts[i], partTokens[i], path);
+			sealedTables.set(path, "dotted");
+		}
 
 		var finalKey = parts[parts.length - 1];
 
@@ -185,6 +211,9 @@ final class Parser {
 			throw error(partTokens[partTokens.length - 1], 'Cannot redefine table "$finalKey" as a value');
 
 		Reflect.setField(current, finalKey, value);
+
+		if (isTableLike(value))
+			sealedTables.set(joinPath(basePath, parts), "inline");
 	}
 
 	private static function dateTimeToDate(value:String):Date {
@@ -229,6 +258,9 @@ final class Parser {
 
 	private function parseValue():Dynamic {
 		if (match(TokenType.STRING))
+			return previous().value;
+
+		if (match(TokenType.MULTILINE_STRING))
 			return previous().value;
 
 		if (match(TokenType.INTEGER))
@@ -278,9 +310,10 @@ final class Parser {
 	private function parseInlineTable():Dynamic {
 		var obj:Dynamic = {};
 
-		skipNewlines();
-
 		while (!check(TokenType.RBRACE)) {
+			if (check(TokenType.NEWLINE))
+				throw error(peek(), "Newline in inline table");
+
 			var key = consumeKey("Expected inline table key");
 
 			if (Reflect.hasField(obj, key.value))
@@ -292,10 +325,13 @@ final class Parser {
 
 			Reflect.setField(obj, key.value, value);
 
-			skipNewlines();
+			if (check(TokenType.NEWLINE))
+				throw error(peek(), "Newline in inline table");
 
 			if (match(TokenType.COMMA)) {
-				skipNewlines();
+				if (check(TokenType.RBRACE))
+					throw error(peek(), "Trailing comma in inline table");
+
 				continue;
 			}
 
@@ -317,7 +353,7 @@ final class Parser {
 	 * Throws a clean TomlError (instead of an opaque cast failure) if the
 	 * segment already holds a non-table value.
 	 */
-	private function descend(parent:Dynamic, part:String, token:Token):Dynamic {
+	private function descend(parent:Dynamic, part:String, token:Token, path:String):Dynamic {
 		if (!Reflect.hasField(parent, part)) {
 			var table:Dynamic = {};
 
@@ -329,6 +365,9 @@ final class Parser {
 		var value = Reflect.field(parent, part);
 
 		if (Std.isOfType(value, Array)) {
+			if (!arrayTables.exists(path))
+				throw error(token, 'Cannot use "${part}" as a table: it is an array, not an array of tables');
+
 			var arr:Array<Dynamic> = cast value;
 
 			if (arr.length == 0 || !isTableLike(arr[arr.length - 1]))
@@ -339,6 +378,9 @@ final class Parser {
 
 		if (!isTableLike(value))
 			throw error(token, 'Cannot redefine "${part}" as a table: it is already defined as a different type');
+
+		if (sealedTables.get(path) == "inline")
+			throw error(token, 'Cannot extend "${part}": it was defined by a dotted key or inline table');
 
 		return value;
 	}
@@ -410,6 +452,20 @@ final class Parser {
 	private function skipNewlines():Void {
 		while (check(TokenType.NEWLINE))
 			advance();
+	}
+
+	private function consumeLineEnd(message:String):Void {
+		if (!check(TokenType.NEWLINE) && !check(TokenType.EOF))
+			throw error(peek(), message);
+	}
+
+	private function joinPath(basePath:String, parts:Array<String>):String {
+		var suffix = parts.join(".");
+
+		if (basePath == "")
+			return suffix;
+
+		return basePath + "." + suffix;
 	}
 
 	private function error(token:Token, message:String):TomlError {

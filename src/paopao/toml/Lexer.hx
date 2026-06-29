@@ -19,7 +19,15 @@ final class Lexer {
 			var c = peek();
 
 			switch (c) {
-				case " " | "\t" | "\r":
+				case " " | "\t":
+					advance();
+
+				case "\r":
+					if (peekNext() != "\n")
+						throw error("Bare carriage return");
+
+					tokens.push(new Token(TokenType.NEWLINE, "\\n", line, column));
+					advance();
 					advance();
 
 				case "\n":
@@ -123,9 +131,24 @@ final class Lexer {
 	private inline function error(message:String):TomlError
 		return new TomlError(message, line, column);
 
-	private function skipComment():Void
-		while (!isAtEnd() && peek() != "\n")
+	private function skipComment():Void {
+		while (!isAtEnd()) {
+			var c = peek();
+
+			if (c == "\n" || (c == "\r" && peekNext() == "\n"))
+				break;
+
+			var code = source.charCodeAt(pos);
+
+			if (!isUnicodeScalarValue(code))
+				throw error("Invalid unicode scalar");
+
+			if (isDisallowedControlCode(code))
+				throw error("Control character in comment");
+
 			advance();
+		}
+	}
 
 	private function isIdentifierStart(c:String):Bool {
 		if (c.length == 0)
@@ -157,8 +180,27 @@ final class Lexer {
 
 		var codepoint = Std.parseInt("0x" + hex);
 
-		return String.fromCharCode(codepoint);
+		if (!isUnicodeScalarValue(codepoint))
+			throw new TomlError('Invalid unicode scalar U+$hex', line, column);
+
+		if (codepoint <= 0xFFFF)
+			return String.fromCharCode(codepoint);
+
+		var value = codepoint - 0x10000;
+		var high = 0xD800 + (value >> 10);
+		var low = 0xDC00 + (value & 0x3FF);
+
+		return String.fromCharCode(high) + String.fromCharCode(low);
 	}
+
+	private inline function isUnicodeScalarValue(codepoint:Null<Int>):Bool
+		return codepoint != null
+			&& codepoint >= 0
+			&& codepoint <= 0x10FFFF
+			&& !(codepoint >= 0xD800 && codepoint <= 0xDFFF);
+
+	private inline function isDisallowedControlCode(code:Int):Bool
+		return (code >= 0 && code < 0x20 && code != 0x09) || code == 0x7F;
 
 	private function readString():Token {
 		var quote = peek();
@@ -192,11 +234,11 @@ final class Lexer {
 					advance();
 					advance();
 
-					return new Token(TokenType.STRING, buf.toString(), startLine, startColumn);
+					return new Token(multiline ? TokenType.MULTILINE_STRING : TokenType.STRING, buf.toString(), startLine, startColumn);
 				}
 			} else {
 				if (c == quote)
-					return new Token(TokenType.STRING, buf.toString(), startLine, startColumn);
+					return new Token(multiline ? TokenType.MULTILINE_STRING : TokenType.STRING, buf.toString(), startLine, startColumn);
 
 				if (c == "\n")
 					throw new TomlError("Newline in string", line, column);
@@ -204,6 +246,20 @@ final class Lexer {
 
 			// Literal strings have no escaping.
 			if (literal) {
+				if (c == "\r" && multiline && peek() == "\n") {
+					advance();
+					buf.add("\n");
+					continue;
+				}
+
+				var code = source.charCodeAt(pos - 1);
+
+				if (!isUnicodeScalarValue(code))
+					throw new TomlError("Invalid unicode scalar", line, column);
+
+				if (isDisallowedControlCode(code) && !(multiline && c == "\n"))
+					throw new TomlError("Control character in string", line, column);
+
 				buf.add(c);
 				continue;
 			}
@@ -273,15 +329,30 @@ final class Lexer {
 				continue;
 			}
 
+			if (c == "\r" && multiline && peek() == "\n") {
+				advance();
+				buf.add("\n");
+				continue;
+			}
+
+			var code = source.charCodeAt(pos - 1);
+
+			if (!isUnicodeScalarValue(code))
+				throw new TomlError("Invalid unicode scalar", line, column);
+
+			if (isDisallowedControlCode(code) && !(multiline && c == "\n"))
+				throw new TomlError("Control character in string", line, column);
+
 			buf.add(c);
 		}
 
 		throw new TomlError("Unterminated string", startLine, startColumn);
 	}
 
-	private static final INT_RE = ~/^[+-]?[0-9](?:_?[0-9])*$/;
-	private static final FLOAT_RE = ~/^[+-]?[0-9](?:_?[0-9])*\.[0-9](?:_?[0-9])*$/;
-	private static final DATETIME_RE = ~/^[0-9]{4}-[0-9]{2}-[0-9]{2}/;
+	private static final INT_RE = ~/^[+-]?(?:0|[1-9](?:_?[0-9])*)$/;
+	private static final FLOAT_RE = ~/^[+-]?(?:0|[1-9](?:_?[0-9])*)\.[0-9](?:_?[0-9])*(?:[eE][+-]?[0-9](?:_?[0-9])*)?$/;
+	private static final DATE_RE = ~/^([0-9]{4})-([0-9]{2})-([0-9]{2})$/;
+	private static final DATETIME_RE = ~/^([0-9]{4})-([0-9]{2})-([0-9]{2})[Tt ]([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})?$/;
 
 	private function isInteger(value:String):Bool
 		return INT_RE.match(value);
@@ -289,8 +360,39 @@ final class Lexer {
 	private function isFloat(value:String):Bool
 		return FLOAT_RE.match(value);
 
-	private function isDateTime(value:String):Bool
-		return DATETIME_RE.match(value);
+	private function isDateTime(value:String):Bool {
+		if (DATE_RE.match(value))
+			return isValidDate(Std.parseInt(DATE_RE.matched(1)), Std.parseInt(DATE_RE.matched(2)), Std.parseInt(DATE_RE.matched(3)));
+
+		if (!DATETIME_RE.match(value))
+			return false;
+
+		if (!isValidDate(Std.parseInt(DATETIME_RE.matched(1)), Std.parseInt(DATETIME_RE.matched(2)), Std.parseInt(DATETIME_RE.matched(3))))
+			return false;
+
+		var hour = Std.parseInt(DATETIME_RE.matched(4));
+		var minute = Std.parseInt(DATETIME_RE.matched(5));
+		var second = Std.parseInt(DATETIME_RE.matched(6));
+
+		return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59 && second >= 0 && second <= 59;
+	}
+
+	private inline function isLeapYear(year:Int):Bool
+		return (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+
+	private function isValidDate(year:Int, month:Int, day:Int):Bool {
+		if (year < 1 || year > 9999 || month < 1 || month > 12 || day < 1)
+			return false;
+
+		var days = switch (month) {
+			case 1 | 3 | 5 | 7 | 8 | 10 | 12: 31;
+			case 4 | 6 | 9 | 11: 30;
+			case 2: isLeapYear(year) ? 29 : 28;
+			default: 0;
+		}
+
+		return day <= days;
+	}
 
 	private function readIdentifierOrValue():Array<Token> {
 		var startLine = line;
@@ -356,6 +458,9 @@ final class Lexer {
 			var parts = value.split(".");
 
 			for (i in 0...parts.length) {
+				if (!isValidBareKey(parts[i]))
+					throw new TomlError('Invalid bare key "${parts[i]}"', startLine, startColumn);
+
 				result.push(new Token(TokenType.IDENTIFIER, parts[i], startLine, startColumn));
 
 				if (i < parts.length - 1)
@@ -365,6 +470,27 @@ final class Lexer {
 			return result;
 		}
 
+		if (!isValidBareKey(value))
+			throw new TomlError('Invalid bare key "$value"', startLine, startColumn);
+
 		return [new Token(TokenType.IDENTIFIER, value, startLine, startColumn)];
+	}
+
+	private function isValidBareKey(value:String):Bool {
+		if (value.length == 0)
+			return false;
+
+		for (i in 0...value.length) {
+			var code = value.charCodeAt(i);
+
+			if (!((code >= 65 && code <= 90)
+				|| (code >= 97 && code <= 122)
+				|| (code >= 48 && code <= 57)
+				|| code == 95
+				|| code == 45))
+				return false;
+		}
+
+		return true;
 	}
 }

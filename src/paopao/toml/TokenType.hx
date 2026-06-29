@@ -5,6 +5,7 @@ enum TokenType {
 
 	// literals
 	STRING;
+	MULTILINE_STRING;
 	INTEGER;
 	FLOAT;
 	BOOLEAN;
