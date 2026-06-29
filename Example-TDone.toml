@@ -1,0 +1,34 @@
+title = "TOML Tester"
+
+[test]
+array = [ 1, 2, 3 ]
+bool_false = false
+bool_true = true
+datetime = { }
+escaped = """
+Line 1
+Line 2	Tabbed"""
+float = 3.14159
+float_sep = 1234.56789
+int = 1_640_150
+literal = "C:\\Users\\Pao\\Desktop"
+mixed = [ "hello", 123, true ]
+multiline = """
+This is
+a multiline
+string.
+"""
+multiline_literal = """
+Nothing is escaped:
+\t\n\\
+"""
+negative_float = -12.5
+negative_int = -1_234
+nested_array = [ [ 1, 2 ], [ 3, 4 ] ]
+positive_int = 123
+string = "Hello, World!"
+zero = 0
+
+[test.inline]
+age = 25
+name = "Tom"

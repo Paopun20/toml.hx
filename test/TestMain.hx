@@ -18,6 +18,7 @@ class TestMain {
 		testFloatsStillWorkWithDottedKeys();
 		testDottedKeysDontLeakBetweenTables();
 		testMultipleDottedAssignmentsSameParent();
+		testKeyValueAtEndOfFile();
 
 		trace("All tests passed!");
 	}
@@ -203,5 +204,13 @@ physical.shape = "round"
 		assert(data.physical.shape == "round", "shared parent shape");
 
 		trace("✓ multiple dotted assignments share parent");
+	}
+
+	static function testKeyValueAtEndOfFile():Void {
+		var data = Toml.parse('datetime = 1979-05-27T07:32:00Z');
+
+		assert(data.datetime != null, "datetime at eof");
+
+		trace("✓ key/value at EOF");
 	}
 }

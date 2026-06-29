@@ -57,7 +57,7 @@ final class Lexer {
 					tokens.push(makeToken(TokenType.RBRACE, "}"));
 					advance();
 
-				case "\"":
+				case "\"", "'":
 					tokens.push(readString());
 
 				default:
@@ -80,6 +80,7 @@ final class Lexer {
 			|| (code >= 97 && code <= 122) // a-z
 			|| code == 95 // _
 			|| code == 45 // -
+			|| code == 43 // +
 			|| (code >= 48 && code <= 57); // 0-9
 	}
 
@@ -160,22 +161,74 @@ final class Lexer {
 	}
 
 	private function readString():Token {
+		var quote = peek();
 		var startLine = line;
 		var startColumn = column;
 
-		advance(); // opening "
+		advance(); // opening quote
+
+		var multiline = false;
+		var literal = quote == "'";
+
+		// """ or '''
+		if (peek() == quote && peekNext() == quote) {
+			multiline = true;
+			advance();
+			advance();
+
+			// Ignore one immediate newline after opening delimiter.
+			if (peek() == "\n")
+				advance();
+		}
 
 		var buf = new StringBuf();
 
 		while (!isAtEnd()) {
 			var c = advance();
 
-			if (c == "\"")
-				return new Token(TokenType.STRING, buf.toString(), startLine, startColumn);
+			// Closing delimiter
+			if (multiline) {
+				if (c == quote && peek() == quote && peekNext() == quote) {
+					advance();
+					advance();
 
+					return new Token(TokenType.STRING, buf.toString(), startLine, startColumn);
+				}
+			} else {
+				if (c == quote)
+					return new Token(TokenType.STRING, buf.toString(), startLine, startColumn);
+
+				if (c == "\n")
+					throw new TomlError("Newline in string", line, column);
+			}
+
+			// Literal strings have no escaping.
+			if (literal) {
+				buf.add(c);
+				continue;
+			}
+
+			// Escape sequences
 			if (c == "\\") {
 				if (isAtEnd())
 					throw new TomlError("Unexpected end of string", line, column);
+
+				// Multiline string line continuation:
+				// backslash + newline + following whitespace are removed.
+				if (multiline && peek() == "\n") {
+					advance();
+
+					while (!isAtEnd()) {
+						var p = peek();
+
+						if (p == " " || p == "\t" || p == "\r" || p == "\n")
+							advance();
+						else
+							break;
+					}
+
+					continue;
+				}
 
 				var escaped = advance();
 
@@ -226,8 +279,8 @@ final class Lexer {
 		throw new TomlError("Unterminated string", startLine, startColumn);
 	}
 
-	private static final INT_RE = ~/^[+-]?[0-9]+$/;
-	private static final FLOAT_RE = ~/^[+-]?[0-9]+\.[0-9]+$/;
+	private static final INT_RE = ~/^[+-]?[0-9](?:_?[0-9])*$/;
+	private static final FLOAT_RE = ~/^[+-]?[0-9](?:_?[0-9])*\.[0-9](?:_?[0-9])*$/;
 	private static final DATETIME_RE = ~/^[0-9]{4}-[0-9]{2}-[0-9]{2}/;
 
 	private function isInteger(value:String):Bool

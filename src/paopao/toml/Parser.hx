@@ -232,10 +232,10 @@ final class Parser {
 			return previous().value;
 
 		if (match(TokenType.INTEGER))
-			return Std.parseInt(previous().value);
+			return Std.parseInt(StringTools.replace(previous().value, "_", ""));
 
 		if (match(TokenType.FLOAT))
-			return Std.parseFloat(previous().value);
+			return Std.parseFloat(StringTools.replace(previous().value, "_", ""));
 
 		if (match(TokenType.BOOLEAN))
 			return previous().value == "true";
@@ -389,9 +389,6 @@ final class Parser {
 	}
 
 	private function check(type:TokenType):Bool {
-		if (isAtEnd())
-			return false;
-
 		return peek().type == type;
 	}
 
