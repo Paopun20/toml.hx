@@ -4,7 +4,6 @@ title = "TOML Tester"
 array = [ 1, 2, 3 ]
 bool_false = false
 bool_true = true
-datetime = { }
 escaped = """
 Line 1
 Line 2	Tabbed"""
@@ -28,6 +27,16 @@ nested_array = [ [ 1, 2 ], [ 3, 4 ] ]
 positive_int = 123
 string = "Hello, World!"
 zero = 0
+
+[test.datetime]
+day = 27
+hour = 7
+minute = 32
+month = 5
+nanosecond = ""
+offsetMinutes = ""
+second = 0
+year = 1_979
 
 [test.inline]
 age = 25
