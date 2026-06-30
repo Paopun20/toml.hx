@@ -189,10 +189,7 @@ final class Lexer {
 	}
 
 	private inline function isUnicodeScalarValue(codepoint:Null<Int>):Bool
-		return codepoint != null
-			&& codepoint >= 0
-			&& codepoint <= 0x10FFFF
-			&& !(codepoint >= 0xD800 && codepoint <= 0xDFFF);
+		return codepoint != null && codepoint >= 0 && codepoint <= 0x10FFFF && !(codepoint >= 0xD800 && codepoint <= 0xDFFF);
 
 	private inline function isDisallowedControlCode(code:Int):Bool
 		return (code >= 0 && code < 0x20 && code != 0x09) || code == 0x7F;
@@ -415,9 +412,7 @@ final class Lexer {
 
 				case " ":
 					// Allow space in datetime values: YYYY-MM-DD HH:MM:SS
-					if (looksLikeDatePrefix(buf.toString())
-						&& !isAtEnd()
-						&& peekNext() >= "0" && peekNext() <= "9") {
+					if (looksLikeDatePrefix(buf.toString()) && !isAtEnd() && peekNext() >= "0" && peekNext() <= "9") {
 						buf.add(c);
 						advance();
 						continue;
@@ -508,11 +503,7 @@ final class Lexer {
 	}
 
 	private function isBareKeyChar(code:Int):Bool {
-		return (code >= 65 && code <= 90)
-			|| (code >= 97 && code <= 122)
-			|| (code >= 48 && code <= 57)
-			|| code == 95
-			|| code == 45;
+		return (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || (code >= 48 && code <= 57) || code == 95 || code == 45;
 	}
 
 	private function isValidBareKey(value:String):Bool {
@@ -531,16 +522,11 @@ final class Lexer {
 		if (value == "+0" || value == "-0")
 			return true;
 
-		return INT_RE.match(value)
-			|| HEX_INT_RE.match(value)
-			|| OCT_INT_RE.match(value)
-			|| BIN_INT_RE.match(value);
+		return INT_RE.match(value) || HEX_INT_RE.match(value) || OCT_INT_RE.match(value) || BIN_INT_RE.match(value);
 	}
 
 	private function isFloat(value:String):Bool {
-		return FLOAT_RE.match(value)
-			|| EXPONENT_RE.match(value)
-			|| INF_NAN_RE.match(value);
+		return FLOAT_RE.match(value) || EXPONENT_RE.match(value) || INF_NAN_RE.match(value);
 	}
 
 	private function isDateTime(value:String):Bool {
@@ -548,38 +534,22 @@ final class Lexer {
 			return isValidDate(Std.parseInt(DATE_RE.matched(1)), Std.parseInt(DATE_RE.matched(2)), Std.parseInt(DATE_RE.matched(3)));
 
 		if (LOCAL_DATETIME_RE.match(value))
-			return isValidDateTime(
-				Std.parseInt(LOCAL_DATETIME_RE.matched(1)),
-				Std.parseInt(LOCAL_DATETIME_RE.matched(2)),
-				Std.parseInt(LOCAL_DATETIME_RE.matched(3)),
-				Std.parseInt(LOCAL_DATETIME_RE.matched(4)),
-				Std.parseInt(LOCAL_DATETIME_RE.matched(5)),
-				LOCAL_DATETIME_RE.matched(6) != null ? Std.parseInt(LOCAL_DATETIME_RE.matched(6)) : 0
-			);
+			return isValidDateTime(Std.parseInt(LOCAL_DATETIME_RE.matched(1)), Std.parseInt(LOCAL_DATETIME_RE.matched(2)),
+				Std.parseInt(LOCAL_DATETIME_RE.matched(3)), Std.parseInt(LOCAL_DATETIME_RE.matched(4)), Std.parseInt(LOCAL_DATETIME_RE.matched(5)),
+				LOCAL_DATETIME_RE.matched(6) != null ? Std.parseInt(LOCAL_DATETIME_RE.matched(6)) : 0);
 
 		if (DATETIME_RE.match(value))
-			return isValidDateTime(
-				Std.parseInt(DATETIME_RE.matched(1)),
-				Std.parseInt(DATETIME_RE.matched(2)),
-				Std.parseInt(DATETIME_RE.matched(3)),
-				Std.parseInt(DATETIME_RE.matched(4)),
-				Std.parseInt(DATETIME_RE.matched(5)),
-				DATETIME_RE.matched(6) != null ? Std.parseInt(DATETIME_RE.matched(6)) : 0
-			);
+			return isValidDateTime(Std.parseInt(DATETIME_RE.matched(1)), Std.parseInt(DATETIME_RE.matched(2)), Std.parseInt(DATETIME_RE.matched(3)),
+				Std.parseInt(DATETIME_RE.matched(4)), Std.parseInt(DATETIME_RE.matched(5)),
+				DATETIME_RE.matched(6) != null ? Std.parseInt(DATETIME_RE.matched(6)) : 0);
 
 		if (TIME_RE.match(value))
-			return isValidTime(
-				Std.parseInt(TIME_RE.matched(1)),
-				Std.parseInt(TIME_RE.matched(2)),
-				TIME_RE.matched(3) != null ? Std.parseInt(TIME_RE.matched(3)) : 0
-			);
+			return isValidTime(Std.parseInt(TIME_RE.matched(1)), Std.parseInt(TIME_RE.matched(2)),
+				TIME_RE.matched(3) != null ? Std.parseInt(TIME_RE.matched(3)) : 0);
 
 		if (LOCAL_TIME_RE.match(value))
-			return isValidTime(
-				Std.parseInt(LOCAL_TIME_RE.matched(1)),
-				Std.parseInt(LOCAL_TIME_RE.matched(2)),
-				LOCAL_TIME_RE.matched(3) != null ? Std.parseInt(LOCAL_TIME_RE.matched(3)) : 0
-			);
+			return isValidTime(Std.parseInt(LOCAL_TIME_RE.matched(1)), Std.parseInt(LOCAL_TIME_RE.matched(2)),
+				LOCAL_TIME_RE.matched(3) != null ? Std.parseInt(LOCAL_TIME_RE.matched(3)) : 0);
 
 		return false;
 	}
@@ -602,16 +572,11 @@ final class Lexer {
 	}
 
 	private function isValidDateTime(year:Int, month:Int, day:Int, hour:Int, minute:Int, second:Int):Bool {
-		return isValidDate(year, month, day)
-			&& hour >= 0 && hour <= 23
-			&& minute >= 0 && minute <= 59
-			&& second >= 0 && second <= 59;
+		return isValidDate(year, month, day) && hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59 && second >= 0 && second <= 59;
 	}
 
 	private function isValidTime(hour:Int, minute:Int, second:Int):Bool {
-		return hour >= 0 && hour <= 23
-			&& minute >= 0 && minute <= 59
-			&& second >= 0 && second <= 59;
+		return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59 && second >= 0 && second <= 59;
 	}
 
 	private static function looksLikeDatePrefix(s:String):Bool {

@@ -5,14 +5,25 @@ import haxe.Timer;
 class Main {
 	static function main() {
 		var text = File.getContent("Example-Tester.toml");
-        var st = Timer.stamp();
-		var data = Toml.parse(text);
-		var stringifyTime = Timer.stamp() - st;
-		trace('Parse: ${(stringifyTime * 1000)} ms');
 
-        var st = Timer.stamp();
-		File.saveContent("Example-TDone.toml", Toml.stringify(data));
-		var stringifyTime = Timer.stamp() - st;
-		trace('Stringify: ${(stringifyTime * 1000)} ms');
+		// Warm-up
+		var data = Toml.parse(text);
+		Toml.stringify(data);
+
+		var iterations = 1000;
+
+		// Parse
+		var start = Timer.stamp();
+		for (i in 0...iterations)
+			Toml.parse(text);
+
+		trace('Average Parse: ${((Timer.stamp() - start) / iterations) * 1000} ms');
+
+		// Stringify
+		start = Timer.stamp();
+		for (i in 0...iterations)
+			Toml.stringify(data);
+
+		trace('Average Stringify: ${((Timer.stamp() - start) / iterations) * 1000} ms');
 	}
 }

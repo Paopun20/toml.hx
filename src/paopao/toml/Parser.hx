@@ -3,7 +3,6 @@ package paopao.toml;
 import Reflect;
 import Type;
 import paopao.toml.TomlDateTime;
-import Date;
 
 @:analyzer(optimize, local_dce, fusion, user_var_fusion)
 final class Parser {
@@ -249,8 +248,10 @@ final class Parser {
 
 			var frac = fullRe.matched(7);
 			if (frac != null) {
-				while (frac.length < 9) frac += "0";
-				if (frac.length > 9) frac = frac.substr(0, 9);
+				while (frac.length < 9)
+					frac += "0";
+				if (frac.length > 9)
+					frac = frac.substr(0, 9);
 				dt.nanosecond = Std.parseInt(frac);
 			}
 
@@ -281,8 +282,10 @@ final class Parser {
 
 			var frac = localRe.matched(7);
 			if (frac != null) {
-				while (frac.length < 9) frac += "0";
-				if (frac.length > 9) frac = frac.substr(0, 9);
+				while (frac.length < 9)
+					frac += "0";
+				if (frac.length > 9)
+					frac = frac.substr(0, 9);
 				dt.nanosecond = Std.parseInt(frac);
 			}
 
@@ -303,8 +306,10 @@ final class Parser {
 
 			var frac = timeRe.matched(4);
 			if (frac != null) {
-				while (frac.length < 9) frac += "0";
-				if (frac.length > 9) frac = frac.substr(0, 9);
+				while (frac.length < 9)
+					frac += "0";
+				if (frac.length > 9)
+					frac = frac.substr(0, 9);
 				dt.nanosecond = Std.parseInt(frac);
 			}
 
@@ -328,8 +333,10 @@ final class Parser {
 
 			var frac = localTimeRe.matched(4);
 			if (frac != null) {
-				while (frac.length < 9) frac += "0";
-				if (frac.length > 9) frac = frac.substr(0, 9);
+				while (frac.length < 9)
+					frac += "0";
+				if (frac.length > 9)
+					frac = frac.substr(0, 9);
 				dt.nanosecond = Std.parseInt(frac);
 			}
 			return dt;
@@ -369,8 +376,10 @@ final class Parser {
 		// IDENTIFIER in value position: try to interpret as typed value
 		if (match(TokenType.IDENTIFIER)) {
 			var v = previous().value;
-			if (v == "true") return true;
-			if (v == "false") return false;
+			if (v == "true")
+				return true;
+			if (v == "false")
+				return false;
 
 			if (isIntegerValue(v))
 				return Std.parseInt(StringTools.replace(v, "_", ""));
@@ -407,18 +416,26 @@ final class Parser {
 	}
 
 	private static function isIntegerValue(value:String):Bool {
-		if (value == "+0" || value == "-0") return true;
-		if (~/^[+-]?(?:0|[1-9](?:_?[0-9])*)$/.match(value)) return true;
-		if (~/^0x[0-9A-Fa-f](?:_?[0-9A-Fa-f])*$/.match(value)) return true;
-		if (~/^0o[0-7](?:_?[0-7])*$/.match(value)) return true;
-		if (~/^0b[01](?:_?[01])*$/.match(value)) return true;
+		if (value == "+0" || value == "-0")
+			return true;
+		if (~/^[+-]?(?:0|[1-9](?:_?[0-9])*)$/.match(value))
+			return true;
+		if (~/^0x[0-9A-Fa-f](?:_?[0-9A-Fa-f])*$/.match(value))
+			return true;
+		if (~/^0o[0-7](?:_?[0-7])*$/.match(value))
+			return true;
+		if (~/^0b[01](?:_?[01])*$/.match(value))
+			return true;
 		return false;
 	}
 
 	private static function isFloatValue(value:String):Bool {
-		if (~/^[+-]?(?:0|[1-9](?:_?[0-9])*)\.[0-9](?:_?[0-9])*(?:[eE][+-]?[0-9](?:_?[0-9])*)?$/.match(value)) return true;
-		if (~/^[+-]?(?:0|[1-9](?:_?[0-9])*)[eE][+-]?[0-9](?:_?[0-9])*$/.match(value)) return true;
-		if (~/^[+-]?(?:inf|nan)$/.match(value)) return true;
+		if (~/^[+-]?(?:0|[1-9](?:_?[0-9])*)\.[0-9](?:_?[0-9])*(?:[eE][+-]?[0-9](?:_?[0-9])*)?$/.match(value))
+			return true;
+		if (~/^[+-]?(?:0|[1-9](?:_?[0-9])*)[eE][+-]?[0-9](?:_?[0-9])*$/.match(value))
+			return true;
+		if (~/^[+-]?(?:inf|nan)$/.match(value))
+			return true;
 		return false;
 	}
 
@@ -429,22 +446,13 @@ final class Parser {
 
 		var dtRe = ~/^([0-9]{4})-([0-9]{2})-([0-9]{2})[Tt ]([0-9]{2}):([0-9]{2})(?::([0-9]{2})(?:\.[0-9]+)?)?(?:Z|[+-][0-9]{2}:[0-9]{2})?$/;
 		if (dtRe.match(value))
-			return isValidDateTime(
-				Std.parseInt(dtRe.matched(1)),
-				Std.parseInt(dtRe.matched(2)),
-				Std.parseInt(dtRe.matched(3)),
-				Std.parseInt(dtRe.matched(4)),
-				Std.parseInt(dtRe.matched(5)),
-				dtRe.matched(6) != null ? Std.parseInt(dtRe.matched(6)) : 0
-			);
+			return isValidDateTime(Std.parseInt(dtRe.matched(1)), Std.parseInt(dtRe.matched(2)), Std.parseInt(dtRe.matched(3)), Std.parseInt(dtRe.matched(4)),
+				Std.parseInt(dtRe.matched(5)), dtRe.matched(6) != null ? Std.parseInt(dtRe.matched(6)) : 0);
 
 		var timeRe = ~/^([0-9]{2}):([0-9]{2})(?::([0-9]{2})(?:\.[0-9]+)?)?(?:Z|[+-][0-9]{2}:[0-9]{2})?$/;
 		if (timeRe.match(value))
-			return isValidTime(
-				Std.parseInt(timeRe.matched(1)),
-				Std.parseInt(timeRe.matched(2)),
-				timeRe.matched(3) != null ? Std.parseInt(timeRe.matched(3)) : 0
-			);
+			return isValidTime(Std.parseInt(timeRe.matched(1)), Std.parseInt(timeRe.matched(2)),
+				timeRe.matched(3) != null ? Std.parseInt(timeRe.matched(3)) : 0);
 
 		return false;
 	}
@@ -467,16 +475,11 @@ final class Parser {
 	}
 
 	private static function isValidDateTime(year:Int, month:Int, day:Int, hour:Int, minute:Int, second:Int):Bool {
-		return isValidDate(year, month, day)
-			&& hour >= 0 && hour <= 23
-			&& minute >= 0 && minute <= 59
-			&& second >= 0 && second <= 59;
+		return isValidDate(year, month, day) && hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59 && second >= 0 && second <= 59;
 	}
 
 	private static function isValidTime(hour:Int, minute:Int, second:Int):Bool {
-		return hour >= 0 && hour <= 23
-			&& minute >= 0 && minute <= 59
-			&& second >= 0 && second <= 59;
+		return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59 && second >= 0 && second <= 59;
 	}
 
 	private function parseArray():Array<Dynamic> {
@@ -622,11 +625,7 @@ final class Parser {
 	}
 
 	private function consumeKey(message:String):Token {
-		if (check(TokenType.IDENTIFIER)
-			|| check(TokenType.STRING)
-			|| check(TokenType.INTEGER)
-			|| check(TokenType.FLOAT)
-			|| check(TokenType.BOOLEAN)
+		if (check(TokenType.IDENTIFIER) || check(TokenType.STRING) || check(TokenType.INTEGER) || check(TokenType.FLOAT) || check(TokenType.BOOLEAN)
 			|| check(TokenType.DATETIME))
 			return advance();
 

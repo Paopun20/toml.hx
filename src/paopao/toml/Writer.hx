@@ -2,6 +2,7 @@ package paopao.toml;
 
 using StringTools;
 
+@:analyzer(optimize, local_dce, fusion, user_var_fusion)
 class Writer {
 	public static function write(value:Dynamic):String {
 		var out = new StringBuf();
@@ -211,59 +212,13 @@ class Writer {
 
 	static function writeDate(date:Dynamic):String {
 		if (Std.isOfType(date, Date)) {
-			function pad(n:Int):String
+			inline function pad(n:Int):String
 				return n < 10 ? "0" + n : Std.string(n);
 
 			return '"' + date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate()) + "T" + pad(date.getHours()) + ":"
 				+ pad(date.getMinutes()) + ":" + pad(date.getSeconds()) + 'Z"';
-		} else if (Std.isOfType(date, TomlDateTime)) {
-			var dt:TomlDateTime = cast date;
-
-			function pad(n:Int):String
-				return n < 10 ? "0" + n : Std.string(n);
-
-			function frac():String {
-				if (dt.nanosecond == null || dt.nanosecond == 0)
-					return "";
-
-				var s = StringTools.lpad(Std.string(dt.nanosecond), "0", 9);
-
-				// remove trailing zeros
-				while (StringTools.endsWith(s, "0"))
-					s = s.substr(0, s.length - 1);
-
-				return "." + s;
-			}
-
-			var hasDate = dt.year != null;
-			var hasTime = dt.hour != null;
-
-			var out = "";
-
-			if (hasDate)
-				out += dt.year + "-" + pad(dt.month) + "-" + pad(dt.day);
-
-			if (hasDate && hasTime)
-				out += "T";
-
-			if (hasTime) {
-				out += pad(dt.hour) + ":" + pad(dt.minute) + ":" + pad(dt.second) + frac();
-
-				if (dt.offsetMinutes != null) {
-					if (dt.offsetMinutes == 0) {
-						out += "Z";
-					} else {
-						var off = dt.offsetMinutes;
-						var sign = off < 0 ? "-" : "+";
-						off = Std.int(Math.abs(off));
-
-						out += sign + pad(Std.int(off / 60)) + ":" + pad(off % 60);
-					}
-				}
-			}
-
-			return out;
-		}
+		} else if (Std.isOfType(date, TomlDateTime))
+			return cast(date, TomlDateTime).toString();
 
 		throw new TomlError("Expected Date or TomlDateTime", 0, 0);
 	}

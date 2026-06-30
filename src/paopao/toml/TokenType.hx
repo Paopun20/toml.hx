@@ -1,32 +1,32 @@
 package paopao.toml;
 
-enum TokenType {
-	EOF;
+enum abstract TokenType(Int) {
+	var EOF;
 
 	// literals
-	STRING;
-	MULTILINE_STRING;
-	INTEGER;
-	FLOAT;
-	BOOLEAN;
-	DATETIME;
+	var STRING;
+	var MULTILINE_STRING;
+	var INTEGER;
+	var FLOAT;
+	var BOOLEAN;
+	var DATETIME;
 
 	// identifiers / keys
-	IDENTIFIER;
+	var IDENTIFIER;
 
 	// punctuation
-	DOT;
-	COMMA;
-	EQUALS;
+	var DOT;
+	var COMMA;
+	var EQUALS;
 
 	// brackets
-	LBRACKET;
-	RBRACKET;
+	var LBRACKET;
+	var RBRACKET;
 
 	// braces
-	LBRACE;
-	RBRACE;
+	var LBRACE;
+	var RBRACE;
 
 	// special
-	NEWLINE;
+	var NEWLINE;
 }
