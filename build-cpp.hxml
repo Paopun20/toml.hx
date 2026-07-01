@@ -1,2 +1,3 @@
 root.hxml
 --cpp bin/cpp
+-D HXCPP_CLANG

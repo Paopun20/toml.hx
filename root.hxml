@@ -1,3 +1,4 @@
 -cp ./src
 -main Main
 -D analyzer-optimize
+-D dce=full

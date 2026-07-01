@@ -91,18 +91,16 @@ final class Lexer {
 		}
 	}
 
-	private inline function isIdentifierStartCode(code:Int):Bool {
+	private inline function isIdentifierStartCode(code:Int):Bool
 		return (code >= 65 && code <= 90) // A-Z
 			|| (code >= 97 && code <= 122) // a-z
 			|| code == 95 // _
 			|| code == 45 // -
 			|| code == 43 // +
 			|| (code >= 48 && code <= 57); // 0-9
-	}
 
-	private inline function isAtEnd():Bool {
+	private inline function isAtEnd():Bool
 		return pos >= source.length;
-	}
 
 	private inline function peek():String {
 		if (isAtEnd())
@@ -126,9 +124,8 @@ final class Lexer {
 		if (c == "\n") {
 			line++;
 			column = 1;
-		} else {
+		} else
 			column++;
-		}
 
 		return c;
 	}
@@ -426,9 +423,8 @@ final class Lexer {
 					// If next char is a quote, or not a valid bare key char,
 					// emit the dot as a separate DOT token
 					var next = peekNext();
-					if (next == "\"" || next == "'" || !isBareKeyChar(next.charCodeAt(0))) {
+					if (next == "\"" || next == "'" || !isBareKeyChar(next.charCodeAt(0)))
 						break;
-					}
 					buf.add(c);
 					advance();
 
@@ -502,32 +498,26 @@ final class Lexer {
 		return [new Token(TokenType.IDENTIFIER, value, startLine, startColumn)];
 	}
 
-	private function isBareKeyChar(code:Int):Bool {
+	private function isBareKeyChar(code:Int):Bool
 		return (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || (code >= 48 && code <= 57) || code == 95 || code == 45;
-	}
 
 	private function isValidBareKey(value:String):Bool {
 		if (value.length == 0)
 			return false;
 
-		for (i in 0...value.length) {
+		for (i in 0...value.length)
 			if (!isBareKeyChar(value.charCodeAt(i)))
 				return false;
-		}
 
 		return true;
 	}
 
-	private function isInteger(value:String):Bool {
-		if (value == "+0" || value == "-0")
-			return true;
+	private function isInteger(value:String):Bool
+		return (value == "+0" || value == "-0")
+			|| (INT_RE.match(value) || HEX_INT_RE.match(value) || OCT_INT_RE.match(value) || BIN_INT_RE.match(value));
 
-		return INT_RE.match(value) || HEX_INT_RE.match(value) || OCT_INT_RE.match(value) || BIN_INT_RE.match(value);
-	}
-
-	private function isFloat(value:String):Bool {
+	private function isFloat(value:String):Bool
 		return FLOAT_RE.match(value) || EXPONENT_RE.match(value) || INF_NAN_RE.match(value);
-	}
 
 	private function isDateTime(value:String):Bool {
 		if (DATE_RE.match(value))
@@ -571,18 +561,15 @@ final class Lexer {
 		return day <= days;
 	}
 
-	private function isValidDateTime(year:Int, month:Int, day:Int, hour:Int, minute:Int, second:Int):Bool {
+	private function isValidDateTime(year:Int, month:Int, day:Int, hour:Int, minute:Int, second:Int):Bool
 		return isValidDate(year, month, day) && hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59 && second >= 0 && second <= 59;
-	}
 
-	private function isValidTime(hour:Int, minute:Int, second:Int):Bool {
+	private function isValidTime(hour:Int, minute:Int, second:Int):Bool
 		return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59 && second >= 0 && second <= 59;
-	}
 
-	private static function looksLikeDatePrefix(s:String):Bool {
+	private static function looksLikeDatePrefix(s:String):Bool
 		return s.length >= 10
 			&& s.charCodeAt(4) == 45 // '-'
 			&& s.charCodeAt(7) == 45 // '-'
 			&& (s.charCodeAt(0) >= 48 && s.charCodeAt(0) <= 57);
-	}
 }

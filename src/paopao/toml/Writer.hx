@@ -4,6 +4,8 @@ using StringTools;
 
 @:analyzer(optimize, local_dce, fusion, user_var_fusion)
 class Writer {
+	static var SIMPLE_KEY = ~/^[-A-Za-z0-9_]+$/;
+
 	public static function write(value:Dynamic):String {
 		var out = new StringBuf();
 		writeTable(out, "", value);
@@ -34,9 +36,7 @@ class Writer {
 	}
 
 	static function writeKey(key:String):String {
-		var valid = ~/^[-A-Za-z0-9_]+$/;
-
-		if (valid.match(key))
+		if (SIMPLE_KEY.match(key))
 			return key;
 
 		return '"' + key.replace('"', '\\"') + '"';
@@ -52,8 +52,9 @@ class Writer {
 			first = false;
 
 			out.add('[[$path]]\n');
+			var fields = getSortedFields(table);
 
-			for (field in getSortedFields(table)) {
+			for (field in fields) {
 				var value = Reflect.field(table, field);
 
 				if (isTable(value) || isTableArray(value))
@@ -64,7 +65,7 @@ class Writer {
 
 			var hasChildren = false;
 
-			for (field in getSortedFields(table)) {
+			for (field in fields) {
 				var value = Reflect.field(table, field);
 
 				if (isTable(value) || isTableArray(value)) {
@@ -76,7 +77,7 @@ class Writer {
 			if (hasChildren)
 				out.add("\n");
 
-			for (field in getSortedFields(table)) {
+			for (field in fields) {
 				var value = Reflect.field(table, field);
 				var childPath = path + "." + field;
 
@@ -89,10 +90,11 @@ class Writer {
 	}
 
 	static function writeTable(out:StringBuf, path:String, obj:Dynamic):Void {
+		var fields = getSortedFields(obj);
 		var childTables:Array<String> = [];
 		var hasValues = false;
 
-		for (field in getSortedFields(obj)) {
+		for (field in fields) {
 			var value = Reflect.field(obj, field);
 
 			if (isEmptyObject(value)) {
@@ -111,7 +113,7 @@ class Writer {
 		if (path != "" && hasValues)
 			out.add('[$path]\n');
 
-		for (field in getSortedFields(obj)) {
+		for (field in fields) {
 			var value = Reflect.field(obj, field);
 
 			if (isEmptyObject(value)) {
@@ -228,17 +230,32 @@ class Writer {
 			return '"""\n' + value + '"""';
 		}
 
-		var escaped = value;
+		var out = new StringBuf();
+		out.add('"');
 
-		escaped = escaped.replace("\\", "\\\\");
-		escaped = escaped.replace("\"", "\\\"");
-		escaped = escaped.replace("\n", "\\n");
-		escaped = escaped.replace("\r", "\\r");
-		escaped = escaped.replace("\t", "\\t");
-		escaped = escaped.replace("\x08", "\\b");
-		escaped = escaped.replace("\x0C", "\\f");
+		for (i in 0...value.length) {
+			var c = value.charAt(i);
 
-		return '"' + escaped + '"';
+			if (c == "\\")
+				out.add("\\\\");
+			else if (c == '"')
+				out.add('\\"');
+			else if (c == "\n")
+				out.add("\\n");
+			else if (c == "\r")
+				out.add("\\r");
+			else if (c == "\t")
+				out.add("\\t");
+			else if (c == "\x08")
+				out.add("\\b");
+			else if (c == "\x0C")
+				out.add("\\f");
+			else
+				out.add(c);
+		}
+
+		out.add('"');
+		return out.toString();
 	}
 
 	static function writeArray(arr:Array<Dynamic>):String {

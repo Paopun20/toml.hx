@@ -648,9 +648,8 @@ final class Parser {
 		return previous();
 	}
 
-	private function check(type:TokenType):Bool {
+	private inline function check(type:TokenType):Bool
 		return peek().type == type;
-	}
 
 	private function match(type:TokenType):Bool {
 		if (!check(type))
@@ -663,38 +662,28 @@ final class Parser {
 	private function consume(type:TokenType, message:String):Token {
 		if (check(type))
 			return advance();
-
 		throw error(peek(), message);
 	}
 
-	private function skipNewlines():Void {
+	private inline function skipNewlines():Void
 		while (check(TokenType.NEWLINE))
 			advance();
-	}
 
-	private function consumeLineEnd(message:String):Void {
+	private function consumeLineEnd(message:String):Void
 		if (!check(TokenType.NEWLINE) && !check(TokenType.EOF))
 			throw error(peek(), message);
-	}
 
-	private static function pathKey(parts:Array<String>):String {
+	private static inline function pathKey(parts:Array<String>):String
 		return parts.join("\x00");
-	}
 
-	private static function joinPath(basePath:String, subParts:Array<String>):String {
+	private static inline function joinPath(basePath:String, subParts:Array<String>):String {
 		var suffix = subParts.join(".");
-		if (basePath == "")
-			return suffix;
-		return basePath + "." + suffix;
+		return basePath == "" ? suffix : basePath + "." + suffix;
 	}
 
-	private static function splitPath(path:String):Array<String> {
-		if (path == "")
-			return [];
-		return path.split(".");
-	}
+	private static function splitPath(path:String):Array<String>
+		return path == "" ? [] : path.split(".");
 
-	private function error(token:Token, message:String):TomlError {
-		return new TomlError(message, token.line, token.column);
-	}
+	private function error(token:Token, message:String):TomlError
+		return (new TomlError(message, token.line, token.column));
 }
