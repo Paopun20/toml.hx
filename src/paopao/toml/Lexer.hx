@@ -3,6 +3,7 @@ package paopao.toml;
 @:analyzer(optimize, local_dce, fusion, user_var_fusion)
 final class Lexer {
 	private final source:String;
+	private final length:Int;
 
 	private var pos:Int = 0;
 	private var line:Int = 1;
@@ -10,6 +11,7 @@ final class Lexer {
 
 	public function new(source:String) {
 		this.source = source;
+		this.length = source.length;
 	}
 
 	public dynamic function tokenize():Array<Token> {
@@ -85,7 +87,7 @@ final class Lexer {
 	}
 
 	private function skipBOM():Void {
-		if (source.length >= 1 && source.charCodeAt(0) == 0xFEFF) {
+		if (this.length >= 1 && source.charCodeAt(0) == 0xFEFF) {
 			pos = 1;
 			column = 2;
 		}
@@ -100,7 +102,7 @@ final class Lexer {
 			|| (code >= 48 && code <= 57); // 0-9
 
 	private inline function isAtEnd():Bool
-		return pos >= source.length;
+		return pos >= this.length;
 
 	private inline function peek():String {
 		if (isAtEnd())
@@ -110,7 +112,7 @@ final class Lexer {
 	}
 
 	private inline function peekNext():String {
-		if (pos + 1 >= source.length)
+		if (pos + 1 >= this.length)
 			return "\x00";
 
 		return source.charAt(pos + 1);

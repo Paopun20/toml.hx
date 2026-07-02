@@ -4,6 +4,8 @@ import Reflect;
 import Type;
 import paopao.toml.TomlDateTime;
 
+using StringTools;
+
 @:analyzer(optimize, local_dce, fusion, user_var_fusion)
 final class Parser {
 	private final tokens:Array<Token>;
@@ -206,7 +208,7 @@ final class Parser {
 			if (definedTables.exists(segPkey))
 				throw error(partTokens[i], 'Cannot append to explicitly defined table "$checkPath" with a dotted key');
 
-			if (arrayTables.exists(segPkey) && basePath != checkPath && !StringTools.startsWith(basePath, checkPath + "."))
+			if (arrayTables.exists(segPkey) && basePath != checkPath && !basePath.startsWith(checkPath + "."))
 				throw error(partTokens[i], 'Cannot append to array of tables "$checkPath" from "$basePath"');
 
 			current = descend(current, parts[i], partTokens[i], segParts);
@@ -231,22 +233,45 @@ final class Parser {
 		}
 	}
 
+	// Datetime parsing patterns (capturing groups). Compiled once and
+	// reused across calls instead of being rebuilt on every parseDateTime
+	// invocation, which previously recompiled 4 regexes per datetime value.
+	private static final DT_FULL_RE = ~/^(\d{4})-(\d{2})-(\d{2})[Tt ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(?:Z|([+-])(\d{2}):(\d{2}))?$/;
+	private static final DT_LOCAL_RE = ~/^(\d{4})-(\d{2})-(\d{2})[Tt ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?([Zz])?$/;
+	private static final DT_TIME_RE = ~/^(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(?:Z|([+-])(\d{2}):(\d{2}))?$/;
+	private static final DT_LOCAL_TIME_RE = ~/^(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?$/;
+	private static final DT_DATE_ONLY_RE = ~/^(\d{4})-(\d{2})-(\d{2})$/;
+
+	// Value-classification patterns (validation only). Mirrors the
+	// equivalent static finals already hoisted in Lexer.hx.
+	private static final INT_RE = ~/^[+-]?(?:0|[1-9](?:_?[0-9])*)$/;
+	private static final HEX_INT_RE = ~/^0x[0-9A-Fa-f](?:_?[0-9A-Fa-f])*$/;
+	private static final OCT_INT_RE = ~/^0o[0-7](?:_?[0-7])*$/;
+	private static final BIN_INT_RE = ~/^0b[01](?:_?[01])*$/;
+
+	private static final FLOAT_RE = ~/^[+-]?(?:0|[1-9](?:_?[0-9])*)\.[0-9](?:_?[0-9])*(?:[eE][+-]?[0-9](?:_?[0-9])*)?$/;
+	private static final EXPONENT_RE = ~/^[+-]?(?:0|[1-9](?:_?[0-9])*)[eE][+-]?[0-9](?:_?[0-9])*$/;
+	private static final INF_NAN_RE = ~/^[+-]?(?:inf|nan)$/;
+
+	private static final DATE_ONLY_RE = ~/^([0-9]{4})-([0-9]{2})-([0-9]{2})$/;
+	private static final DATETIME_VALUE_RE = ~/^([0-9]{4})-([0-9]{2})-([0-9]{2})[Tt ]([0-9]{2}):([0-9]{2})(?::([0-9]{2})(?:\.[0-9]+)?)?(?:Z|[+-][0-9]{2}:[0-9]{2})?$/;
+	private static final TIME_VALUE_RE = ~/^([0-9]{2}):([0-9]{2})(?::([0-9]{2})(?:\.[0-9]+)?)?(?:Z|[+-][0-9]{2}:[0-9]{2})?$/;
+
 	private static function parseDateTime(value:String):TomlDateTime {
 		var dt = new TomlDateTime();
 
 		// Full datetime with date and time
-		var fullRe = ~/^(\d{4})-(\d{2})-(\d{2})[Tt ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(?:Z|([+-])(\d{2}):(\d{2}))?$/;
-		if (fullRe.match(value)) {
-			dt.year = Std.parseInt(fullRe.matched(1));
-			dt.month = Std.parseInt(fullRe.matched(2));
-			dt.day = Std.parseInt(fullRe.matched(3));
-			dt.hour = Std.parseInt(fullRe.matched(4));
-			dt.minute = Std.parseInt(fullRe.matched(5));
+		if (DT_FULL_RE.match(value)) {
+			dt.year = Std.parseInt(DT_FULL_RE.matched(1));
+			dt.month = Std.parseInt(DT_FULL_RE.matched(2));
+			dt.day = Std.parseInt(DT_FULL_RE.matched(3));
+			dt.hour = Std.parseInt(DT_FULL_RE.matched(4));
+			dt.minute = Std.parseInt(DT_FULL_RE.matched(5));
 
-			if (fullRe.matched(6) != null)
-				dt.second = Std.parseInt(fullRe.matched(6));
+			if (DT_FULL_RE.matched(6) != null)
+				dt.second = Std.parseInt(DT_FULL_RE.matched(6));
 
-			var frac = fullRe.matched(7);
+			var frac = DT_FULL_RE.matched(7);
 			if (frac != null) {
 				while (frac.length < 9)
 					frac += "0";
@@ -255,10 +280,10 @@ final class Parser {
 				dt.nanosecond = Std.parseInt(frac);
 			}
 
-			if (fullRe.matched(8) != null) {
-				var sign = fullRe.matched(8) == "+" ? 1 : -1;
-				var hours = Std.parseInt(fullRe.matched(9));
-				var mins = Std.parseInt(fullRe.matched(10));
+			if (DT_FULL_RE.matched(8) != null) {
+				var sign = DT_FULL_RE.matched(8) == "+" ? 1 : -1;
+				var hours = Std.parseInt(DT_FULL_RE.matched(9));
+				var mins = Std.parseInt(DT_FULL_RE.matched(10));
 				if (hours < 0 || hours > 23)
 					throw 'Invalid offset hours: $hours';
 				if (mins < 0 || mins > 59)
@@ -269,18 +294,17 @@ final class Parser {
 		}
 
 		// Local datetime (same as full but with lowercase z or without timezone)
-		var localRe = ~/^(\d{4})-(\d{2})-(\d{2})[Tt ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?([Zz])?$/;
-		if (localRe.match(value)) {
-			dt.year = Std.parseInt(localRe.matched(1));
-			dt.month = Std.parseInt(localRe.matched(2));
-			dt.day = Std.parseInt(localRe.matched(3));
-			dt.hour = Std.parseInt(localRe.matched(4));
-			dt.minute = Std.parseInt(localRe.matched(5));
+		if (DT_LOCAL_RE.match(value)) {
+			dt.year = Std.parseInt(DT_LOCAL_RE.matched(1));
+			dt.month = Std.parseInt(DT_LOCAL_RE.matched(2));
+			dt.day = Std.parseInt(DT_LOCAL_RE.matched(3));
+			dt.hour = Std.parseInt(DT_LOCAL_RE.matched(4));
+			dt.minute = Std.parseInt(DT_LOCAL_RE.matched(5));
 
-			if (localRe.matched(6) != null)
-				dt.second = Std.parseInt(localRe.matched(6));
+			if (DT_LOCAL_RE.matched(6) != null)
+				dt.second = Std.parseInt(DT_LOCAL_RE.matched(6));
 
-			var frac = localRe.matched(7);
+			var frac = DT_LOCAL_RE.matched(7);
 			if (frac != null) {
 				while (frac.length < 9)
 					frac += "0";
@@ -289,22 +313,21 @@ final class Parser {
 				dt.nanosecond = Std.parseInt(frac);
 			}
 
-			if (localRe.matched(8) != null)
+			if (DT_LOCAL_RE.matched(8) != null)
 				dt.offsetMinutes = 0;
 
 			return dt;
 		}
 
 		// Time only with optional timezone
-		var timeRe = ~/^(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(?:Z|([+-])(\d{2}):(\d{2}))?$/;
-		if (timeRe.match(value)) {
-			dt.hour = Std.parseInt(timeRe.matched(1));
-			dt.minute = Std.parseInt(timeRe.matched(2));
+		if (DT_TIME_RE.match(value)) {
+			dt.hour = Std.parseInt(DT_TIME_RE.matched(1));
+			dt.minute = Std.parseInt(DT_TIME_RE.matched(2));
 
-			if (timeRe.matched(3) != null)
-				dt.second = Std.parseInt(timeRe.matched(3));
+			if (DT_TIME_RE.matched(3) != null)
+				dt.second = Std.parseInt(DT_TIME_RE.matched(3));
 
-			var frac = timeRe.matched(4);
+			var frac = DT_TIME_RE.matched(4);
 			if (frac != null) {
 				while (frac.length < 9)
 					frac += "0";
@@ -313,25 +336,24 @@ final class Parser {
 				dt.nanosecond = Std.parseInt(frac);
 			}
 
-			if (timeRe.matched(5) != null) {
-				var sign = timeRe.matched(5) == "+" ? 1 : -1;
-				var hours = Std.parseInt(timeRe.matched(6));
-				var mins = Std.parseInt(timeRe.matched(7));
+			if (DT_TIME_RE.matched(5) != null) {
+				var sign = DT_TIME_RE.matched(5) == "+" ? 1 : -1;
+				var hours = Std.parseInt(DT_TIME_RE.matched(6));
+				var mins = Std.parseInt(DT_TIME_RE.matched(7));
 				dt.offsetMinutes = sign * (hours * 60 + mins);
 			}
 			return dt;
 		}
 
 		// Local time only (without timezone)
-		var localTimeRe = ~/^(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?$/;
-		if (localTimeRe.match(value)) {
-			dt.hour = Std.parseInt(localTimeRe.matched(1));
-			dt.minute = Std.parseInt(localTimeRe.matched(2));
+		if (DT_LOCAL_TIME_RE.match(value)) {
+			dt.hour = Std.parseInt(DT_LOCAL_TIME_RE.matched(1));
+			dt.minute = Std.parseInt(DT_LOCAL_TIME_RE.matched(2));
 
-			if (localTimeRe.matched(3) != null)
-				dt.second = Std.parseInt(localTimeRe.matched(3));
+			if (DT_LOCAL_TIME_RE.matched(3) != null)
+				dt.second = Std.parseInt(DT_LOCAL_TIME_RE.matched(3));
 
-			var frac = localTimeRe.matched(4);
+			var frac = DT_LOCAL_TIME_RE.matched(4);
 			if (frac != null) {
 				while (frac.length < 9)
 					frac += "0";
@@ -343,11 +365,10 @@ final class Parser {
 		}
 
 		// Date only
-		var dateRe = ~/^(\d{4})-(\d{2})-(\d{2})$/;
-		if (dateRe.match(value)) {
-			dt.year = Std.parseInt(dateRe.matched(1));
-			dt.month = Std.parseInt(dateRe.matched(2));
-			dt.day = Std.parseInt(dateRe.matched(3));
+		if (DT_DATE_ONLY_RE.match(value)) {
+			dt.year = Std.parseInt(DT_DATE_ONLY_RE.matched(1));
+			dt.month = Std.parseInt(DT_DATE_ONLY_RE.matched(2));
+			dt.day = Std.parseInt(DT_DATE_ONLY_RE.matched(3));
 			return dt;
 		}
 
@@ -362,7 +383,7 @@ final class Parser {
 			return previous().value;
 
 		if (match(TokenType.INTEGER))
-			return Std.parseInt(StringTools.replace(previous().value, "_", ""));
+			return Std.parseInt((previous().value).replace("_", ""));
 
 		if (match(TokenType.FLOAT))
 			return parseFloatValue(previous().value);
@@ -382,7 +403,7 @@ final class Parser {
 				return false;
 
 			if (isIntegerValue(v))
-				return Std.parseInt(StringTools.replace(v, "_", ""));
+				return Std.parseInt(v.replace("_", ""));
 
 			if (isFloatValue(v))
 				return parseFloatValue(v);
@@ -412,47 +433,45 @@ final class Parser {
 			case "nan", "+nan", "-nan":
 				return Math.NaN;
 		}
-		return Std.parseFloat(StringTools.replace(value, "_", ""));
+		return Std.parseFloat(value.replace("_", ""));
 	}
 
 	private static function isIntegerValue(value:String):Bool {
 		if (value == "+0" || value == "-0")
 			return true;
-		if (~/^[+-]?(?:0|[1-9](?:_?[0-9])*)$/.match(value))
+		if (INT_RE.match(value))
 			return true;
-		if (~/^0x[0-9A-Fa-f](?:_?[0-9A-Fa-f])*$/.match(value))
+		if (HEX_INT_RE.match(value))
 			return true;
-		if (~/^0o[0-7](?:_?[0-7])*$/.match(value))
+		if (OCT_INT_RE.match(value))
 			return true;
-		if (~/^0b[01](?:_?[01])*$/.match(value))
+		if (BIN_INT_RE.match(value))
 			return true;
 		return false;
 	}
 
 	private static function isFloatValue(value:String):Bool {
-		if (~/^[+-]?(?:0|[1-9](?:_?[0-9])*)\.[0-9](?:_?[0-9])*(?:[eE][+-]?[0-9](?:_?[0-9])*)?$/.match(value))
+		if (FLOAT_RE.match(value))
 			return true;
-		if (~/^[+-]?(?:0|[1-9](?:_?[0-9])*)[eE][+-]?[0-9](?:_?[0-9])*$/.match(value))
+		if (EXPONENT_RE.match(value))
 			return true;
-		if (~/^[+-]?(?:inf|nan)$/.match(value))
+		if (INF_NAN_RE.match(value))
 			return true;
 		return false;
 	}
 
 	private static function isDateTimeValue(value:String):Bool {
-		var dateRe = ~/^([0-9]{4})-([0-9]{2})-([0-9]{2})$/;
-		if (dateRe.match(value))
-			return isValidDate(Std.parseInt(dateRe.matched(1)), Std.parseInt(dateRe.matched(2)), Std.parseInt(dateRe.matched(3)));
+		if (DATE_ONLY_RE.match(value))
+			return isValidDate(Std.parseInt(DATE_ONLY_RE.matched(1)), Std.parseInt(DATE_ONLY_RE.matched(2)), Std.parseInt(DATE_ONLY_RE.matched(3)));
 
-		var dtRe = ~/^([0-9]{4})-([0-9]{2})-([0-9]{2})[Tt ]([0-9]{2}):([0-9]{2})(?::([0-9]{2})(?:\.[0-9]+)?)?(?:Z|[+-][0-9]{2}:[0-9]{2})?$/;
-		if (dtRe.match(value))
-			return isValidDateTime(Std.parseInt(dtRe.matched(1)), Std.parseInt(dtRe.matched(2)), Std.parseInt(dtRe.matched(3)), Std.parseInt(dtRe.matched(4)),
-				Std.parseInt(dtRe.matched(5)), dtRe.matched(6) != null ? Std.parseInt(dtRe.matched(6)) : 0);
+		if (DATETIME_VALUE_RE.match(value))
+			return isValidDateTime(Std.parseInt(DATETIME_VALUE_RE.matched(1)), Std.parseInt(DATETIME_VALUE_RE.matched(2)),
+				Std.parseInt(DATETIME_VALUE_RE.matched(3)), Std.parseInt(DATETIME_VALUE_RE.matched(4)), Std.parseInt(DATETIME_VALUE_RE.matched(5)),
+				DATETIME_VALUE_RE.matched(6) != null ? Std.parseInt(DATETIME_VALUE_RE.matched(6)) : 0);
 
-		var timeRe = ~/^([0-9]{2}):([0-9]{2})(?::([0-9]{2})(?:\.[0-9]+)?)?(?:Z|[+-][0-9]{2}:[0-9]{2})?$/;
-		if (timeRe.match(value))
-			return isValidTime(Std.parseInt(timeRe.matched(1)), Std.parseInt(timeRe.matched(2)),
-				timeRe.matched(3) != null ? Std.parseInt(timeRe.matched(3)) : 0);
+		if (TIME_VALUE_RE.match(value))
+			return isValidTime(Std.parseInt(TIME_VALUE_RE.matched(1)), Std.parseInt(TIME_VALUE_RE.matched(2)),
+				TIME_VALUE_RE.matched(3) != null ? Std.parseInt(TIME_VALUE_RE.matched(3)) : 0);
 
 		return false;
 	}
